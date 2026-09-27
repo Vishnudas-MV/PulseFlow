@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pulseflow_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pulseflow_admin
+      POSTGRES_PASSWORD: pulseflow_secret
+      POSTGRES_DB: pulseflow_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pulseflow_admin -d pulseflow_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - pulseflow_net
+
+  mongo:
+    image: mongo:7.0
+    container_name: pulseflow_mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: pulseflow_admin
+      MONGO_INITDB_ROOT_PASSWORD: pulseflow_secret
+      MONGO_INITDB_DATABASE: pulseflow_audit
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok", "-u", "pulseflow_admin", "-p", "pulseflow_secret", "--authenticationDatabase", "admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - pulseflow_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: pulseflow_redis
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "pulseflow_redis_secret", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "pulseflow_redis_secret", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - pulseflow_net
+
+volumes:
+  postgres_data:
+    name: pulseflow_postgres_data
+  mongo_data:
+    name: pulseflow_mongo_data
+  redis_data:
+    name: pulseflow_redis_data
+
+networks:
+  pulseflow_net:
+    name: pulseflow_network
+    driver: bridge
